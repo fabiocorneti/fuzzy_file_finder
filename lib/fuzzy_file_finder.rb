@@ -196,11 +196,16 @@ class FuzzyFileFinder
   # Takes the given +pattern+ (which must be a string, formatted as
   # described in #search), and returns up to +max+ matches in an
   # Array. If +max+ is nil, all matches will be returned.
-  def find(pattern, max=nil)
+  # If disambiguate is true, results abbreviations are disambiguated by
+  # expanding common path components.
+  def find(pattern, max=nil, disambiguate=false)
     results = []
     search(pattern) do |match|
       results << match
       break if max && results.length >= max
+    end
+    if disambiguate:
+      disambiguate_matches(results)
     end
     return results
   end
@@ -211,6 +216,36 @@ class FuzzyFileFinder
   end
 
   private
+
+    #Disambiguates given matches starting from the specified reverse 
+    #path component index
+    def disambiguate_matches(matches, path_index=0)
+      expanded_abbrs = []
+      disambiguations = []
+      matches_by_abbr = {}
+
+      matches.each { |m|
+        abbr_parts = m[:abbr].split(File::SEPARATOR)
+        if path_index+1 <= abbr_parts.length:
+          if path_index >=1
+            abbr_parts[-path_index-1] = m[:highlighted_path].split(File::SEPARATOR)[-path_index-1]
+          end
+          expanded_abbr = abbr_parts.slice(-path_index-1,abbr_parts.length).join(File::SEPARATOR)
+          if matches_by_abbr.key?(expanded_abbr)
+            matches_by_abbr[expanded_abbr].push(m)
+          else
+            matches_by_abbr[expanded_abbr] = [m,]
+          end
+          m[:abbr] = abbr_parts.join(File::SEPARATOR)
+        end
+      }
+
+      matches_by_abbr.each { |abbr, ambiguous_matches|
+        if ambiguous_matches.length > 1
+          disambiguate_matches(ambiguous_matches, path_index + 1)
+        end
+      }
+    end
 
     # Recursively scans +directory+ and all files and subdirectories
     # beneath it, depth-first.
