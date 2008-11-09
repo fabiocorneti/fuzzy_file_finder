@@ -1,2 +1,3 @@
 *.swp
 pkg/
+lib/apptest/
